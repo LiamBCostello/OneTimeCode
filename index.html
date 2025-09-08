@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OneTime — Home</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg"></div>
+
+  <!-- Fixed Header -->
+  <header class="fixed-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="OneTime Home">
+        <svg class="logo" width="28" height="28" viewBox="0 0 48 48" aria-hidden="true">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8bc1ff"/>
+              <stop offset="1" stop-color="#6ea8ff"/>
+            </linearGradient>
+          </defs>
+          <rect x="3" y="3" width="42" height="42" rx="10" fill="url(#g)"/>
+          <path d="M13 24c0-6 5-11 11-11s11 5 11 11-5 11-11 11-11-5-11-11zm7 0a4 4 0 1 0 8 0a4 4 0 0 0-8 0z" fill="#0f1226" opacity=".9"/>
+        </svg>
+        <div class="titles">
+          <h1>OneTime</h1>
+          <div class="tagline">Anonymous • Ephemeral • P2P</div>
+        </div>
+      </a>
+  
+      <div class="header-actions">
+        <button id="themeToggle" class="btn ghost sm" title="Toggle light/dark mode" aria-pressed="false" aria-label="Toggle theme">
+          <svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/>
+          </svg>
+          <svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="5" fill="currentColor"/>
+            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="12" y1="1" x2="12" y2="4"/>
+              <line x1="12" y1="20" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/>
+              <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="4" y2="12"/>
+              <line x1="20" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/>
+              <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+            </g>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>  
+
+  <!-- Hero / Homepage -->
+  <main class="shell">
+    <section class="hero panel">
+      <h2 class="hero-title">Simple, private chats — gone the moment you leave.</h2>
+      <div class="cta-grid">
+        <a class="cta btn-xl" href="talk.html">
+          <span class="cta-title">Talk with a stranger</span>
+          <span class="cta-sub">Quick one-to-one match</span>
+        </a>
+        <a class="cta btn-xl alt" href="lounge.html">
+          <span class="cta-title">Join a lounge</span>
+          <span class="cta-sub">Named, ephemeral group room</span>
+        </a>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p class="muted tiny">
+        OneTime does not store messages or identities. Sessions live only in memory and disappear when you close or reload.
+      </p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+  <script src="theme.js" defer></script>
+</body>
+</html>

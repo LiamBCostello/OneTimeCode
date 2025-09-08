@@ -1,0 +1,704 @@
+:root{
+  --bg1:#0b0f24;
+  --bg2:#0b2438;
+  --glass:rgba(255,255,255,0.06);
+  --glass-2:rgba(255,255,255,0.12);
+  --text:#e9eef6;
+  --muted:#a4b3c7;
+  --primary:#6ea8ff;
+  --primary-2:#9bc5ff;
+  --card:rgba(255,255,255,0.04);
+  --radius:16px;
+  --shadow:0 14px 34px rgba(0,0,0,0.35);
+}
+
+/* =================== GLOBAL / BASE =================== */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  color:var(--text);
+  font:16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  background:
+    radial-gradient(1200px 800px at 20% -10%, #2a3c6b33, transparent),
+    radial-gradient(900px 600px at 100% 0%, #5a2a6b33, transparent),
+    linear-gradient(120deg, var(--bg1), var(--bg2));
+  overflow-y:auto;
+}
+
+.bg{
+  position:fixed;inset:0;pointer-events:none;
+  background:
+    radial-gradient(600px 600px at 80% 120%, #2f69a833, transparent),
+    radial-gradient(500px 400px at 10% 90%, #8347c233, transparent);
+  filter: blur(20px);
+  z-index:0; /* keep behind everything */
+}
+
+/* =================== HEADER =================== */
+.fixed-header{
+  position:fixed;top:0;left:0;right:0;z-index:1000; /* raised so logo never hides */
+  background:rgba(8,12,24,0.55);
+  backdrop-filter: blur(10px);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.header-inner{
+  max-width:1080px;margin:0 auto;padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text)}
+.logo{border-radius:8px;box-shadow:0 6px 16px rgba(110,168,255,0.25)}
+.titles h1{margin:0;font-size:20px;letter-spacing:.3px;color:var(--text)}
+.tagline{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* Theme toggle (right side of header) */
+.header-actions{ display:flex; align-items:center; gap:10px; }
+#themeToggle.btn{ display:inline-flex; align-items:center; gap:8px; }
+#themeToggle svg{ width:18px; height:18px; display:block; }
+#themeToggle .sun{ display:none; }
+#themeToggle .moon{ display:inline; }
+
+/* Show sun in light mode, moon in dark */
+:root[data-theme="light"] #themeToggle .sun{ display:inline; }
+:root[data-theme="light"] #themeToggle .moon{ display:none; }
+
+/* =================== LAYOUT / PANELS =================== */
+.shell{
+  max-width:1080px;margin:110px auto 40px; /* account for fixed header */
+  padding:16px;
+}
+
+.panel{
+  background:var(--glass);
+  border:1px solid var(--glass-2);
+  border-radius:var(--radius);
+  padding:22px;
+  backdrop-filter: blur(12px);
+  box-shadow:var(--shadow);
+}
+
+/* =================== HERO / CTA =================== */
+.hero{
+  text-align:center;
+  padding:36px 22px;
+}
+.hero-title{
+  margin:10px 0 20px 0;
+  font-size:28px;
+  letter-spacing:.2px;
+}
+
+.cta-grid{
+  display:grid;gap:18px;
+  grid-template-columns:1fr 1fr;
+  margin:10px auto 6px;
+  max-width:880px;
+}
+@media (max-width:800px){ .cta-grid{ grid-template-columns:1fr } }
+
+.cta{
+  position:relative;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:6px; text-decoration:none; color:#0b1220;
+  min-height:140px; padding:24px 26px; border-radius:18px;
+  background:linear-gradient(180deg, var(--primary-2), var(--primary));
+  box-shadow:0 16px 36px rgba(110,168,255,0.35);
+  overflow:hidden;
+  transform: translateZ(0) scale(1);
+  transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+}
+.cta.alt{
+  color:#0b1220;
+  background:linear-gradient(180deg, #c9d7ff, #8fb9ff);
+  box-shadow:0 16px 36px rgba(143,185,255,0.35);
+}
+.cta:hover{ transform: scale(1.035); filter: brightness(1.02); }
+.cta:active{ transform: scale(1.02); }
+
+/* Subtle sheen */
+.cta::before{
+  content:""; pointer-events:none;
+  position:absolute; inset:0 auto 0 -60%;
+  width:60%; transform:skewX(-20deg);
+  background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.18) 50%, rgba(255,255,255,0) 100%);
+  opacity:.0; transition:opacity .25s ease, transform .25s ease;
+}
+.cta:hover::before{ opacity:.7; transform:skewX(-20deg) translateX(140%) }
+
+.btn-xl .cta-title{ font-size:22px; font-weight:800; letter-spacing:.2px; }
+.btn-xl .cta-sub{ font-size:14px; opacity:.9; }
+
+/* =================== FOOTER =================== */
+.foot{margin-top:18px;text-align:center}
+.muted{color:var(--muted)}
+.tiny{font-size:12px}
+
+/* =================== TALK PAGE UPGRADE =================== */
+.talk-page .talk-card{
+  padding: 18px 18px 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04));
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+}
+
+.talk-page .talk-toolbar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin-bottom:12px;
+}
+.talk-page .loc-wrap{ display:flex; align-items:center; gap:10px; }
+.talk-page .status-wrap{ display:flex; align-items:center; gap:8px; }
+
+.talk-page .select{
+  appearance:none;
+  padding:10px 12px; border-radius:12px;
+  border:1px solid rgba(255,255,255,0.22);
+  background:rgba(10,15,25,0.55);
+  color:var(--text);
+  outline:none;
+  transition: box-shadow .15s ease, border-color .15s ease, background .15s ease;
+}
+.talk-page .select:focus{ border-color:#9fc2ff; box-shadow:0 0 0 3px #9fc2ff22; }
+
+.talk-page .transcript{
+  height: 58vh; min-height: 420px;
+  overflow:auto; margin:0; padding:18px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05));
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow: inset 0 8px 20px rgba(0,0,0,0.18);
+  display:flex; flex-direction:column; gap:12px;
+}
+
+/* message bubbles */
+.talk-page .msg { display:flex; }
+.talk-page .bubble{
+  max-width: 80%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.20);
+}
+.talk-page .msg.me { justify-content:flex-end; }
+.talk-page .msg.me .bubble{
+  background: linear-gradient(180deg, #a8d1ff33, #6ea8ff22);
+  border-color: #7db7ff66;
+}
+.talk-page .meta{ display:flex; gap:8px; font-size:11px; color:var(--muted); margin-bottom:4px; }
+.talk-page .text{ white-space:pre-wrap; word-break:break-word; font-size:15px; line-height:1.45; }
+
+/* input bar */
+.talk-page .inputBar{
+  display:flex; gap:10px; margin-top:12px;
+  background: rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius: 14px; padding: 10px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.20);
+}
+.talk-page .msgInput{
+  flex:1;
+  padding:14px 14px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(10,15,25,0.6);
+  font-size:15px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.talk-page .msgInput:focus{
+  border-color:#9fc2ff; box-shadow:0 0 0 3px #9fc2ff22;
+  background: rgba(10,15,25,0.72);
+}
+.talk-page .sendBtn{ padding:12px 16px; font-weight:700; }
+
+/* controls row BELOW the chat */
+.talk-page .controlsRow{
+  margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.talk-page .hint{ color:var(--muted); display:flex; align-items:center; gap:8px; }
+.talk-page kbd{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size:12px; padding:3px 6px; border-radius:6px;
+  border:1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2);
+}
+.talk-page .nextBtn{
+  background: linear-gradient(180deg, #cbe0ff, #8bbcff);
+  color:#0b1220; font-weight:800; padding:12px 18px; border-radius:12px;
+  box-shadow: 0 14px 30px rgba(139,188,255,0.35);
+}
+.talk-page .nextBtn:hover{ transform: translateY(-1px); filter: brightness(1.03); }
+
+/* connection dot */
+.dot.live.off{ background:#ff8b8b; box-shadow:none; }
+
+/* input text visibility fixes */
+input, textarea, select { color: var(--text); }
+.talk-page .msgInput{
+  color: var(--text) !important;
+  caret-color: var(--primary-2);
+}
+.talk-page .msgInput::placeholder{ color: var(--muted); opacity: .95; }
+
+/* =================== TALK: TOGGLE + VIDEO =================== */
+.hidden { display: none !important; }
+
+.modebar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin-bottom:12px;
+}
+.mode-heading{
+  margin:0; font-size:26px; letter-spacing:.2px;
+  background: linear-gradient(180deg, #d9e7ff, #9fc2ff);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow: 0 10px 30px rgba(110,168,255,0.25);
+}
+
+/* Fancy switch */
+.switch{ position:relative; display:inline-flex; align-items:center; gap:10px; }
+.switch input{ position:absolute; opacity:0; width:0; height:0; }
+.switch .slider{
+  width:68px; height:32px; border-radius:999px;
+  background: rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.22);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,0.25);
+  position:relative; transition: background .2s ease, border-color .2s ease;
+}
+.switch .slider::after{
+  content:""; position:absolute; top:3px; left:3px; width:26px; height:26px; border-radius:50%;
+  background: linear-gradient(180deg, #ffffff, #dbe8ff);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+  transition: transform .2s ease;
+}
+.switch input:checked + .slider{
+  background: linear-gradient(180deg, #bcd7ff, #89b7ff);
+  border-color: #8fb9ff;
+}
+.switch input:checked + .slider::after{ transform: translateX(36px); }
+.switch .switch-text{
+  display:flex; gap:8px; font-size:12px; color:var(--muted);
+}
+
+/* Video area */
+.videoArea{
+  position:relative; margin-bottom:12px;
+  border-radius:16px; overflow:hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04));
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.30);
+  aspect-ratio: 16 / 9;
+}
+.remoteVideo, .localVideo{
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+.localVideo{
+  position:absolute; width:22%; height:auto; aspect-ratio: 16/9;
+  right:10px; bottom:10px; border-radius:12px; overflow:hidden;
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+}
+
+/* =================== LOUNGE BROWSER / TABS =================== */
+.tabbar{
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  margin-top: -6px; margin-bottom: 6px;
+}
+.tab{
+  appearance:none; border:none; cursor:pointer;
+  padding:10px 14px; border-radius:999px; font-weight:700;
+  background: rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.18);
+  color: var(--text);
+  transition: transform .08s ease, filter .2s ease, background .2s ease, border-color .2s ease;
+}
+.tab:hover{ transform: translateY(-1px); filter:brightness(1.03) }
+.tab.active{
+  background: linear-gradient(180deg, #cbe0ff, #8bbcff);
+  color:#0b1220;
+  border-color: transparent;
+  box-shadow: 0 12px 26px rgba(139,188,255,0.35);
+}
+.tabpane{ margin-top: 10px; }
+
+.browse-head{
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;
+}
+.loungeList{
+  list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;
+}
+.loungeRow{
+  display:grid; grid-template-columns: 1fr auto; align-items:center; gap:12px;
+  padding:12px 14px; border-radius:12px;
+  background: rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.12);
+}
+.lr-left{ display:flex; flex-direction:column; }
+.lr-name{ font-weight:700; }
+.lr-right{ display:flex; align-items:center; gap:10px; }
+
+.hidden{ display:none !important; }
+
+/* =================== UNIFIED CONTROLS =================== */
+.input{
+  appearance:none;
+  width:100%;
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(10,15,25,0.62);
+  color: var(--text);
+  font-size:15px;
+  outline:none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.input::placeholder{ color:var(--muted); opacity:.95; }
+.input:focus{
+  border-color:#9fc2ff;
+  box-shadow:0 0 0 3px #9fc2ff22;
+  background: rgba(10,15,25,0.74);
+}
+
+.btn{
+  appearance:none; cursor:pointer; user-select:none;
+  padding:12px 16px; border-radius:14px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: var(--text); font-weight:700; letter-spacing:.2px;
+  transition: transform .08s ease, filter .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.btn:hover{ transform: translateY(-1px); filter:brightness(1.03); }
+.btn:active{ transform: translateY(0); filter:brightness(.98); }
+.btn.sm{ padding:8px 12px; border-radius:12px; font-weight:700; font-size:13px; }
+
+.btn.primary{
+  background: linear-gradient(180deg, #cbe0ff, #8bbcff);
+  color:#0b1220; border-color: transparent;
+  box-shadow: 0 14px 30px rgba(139,188,255,0.35);
+}
+.btn.primary:hover{ filter:brightness(1.03); transform: translateY(-1px); }
+
+.btn.ghost{
+  background: rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.20);
+}
+
+.pill{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:6px 10px; border-radius:999px;
+  background: rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.20);
+  font-size:12px; color:var(--text);
+}
+
+.label{ color:var(--muted); font-size:14px; }
+
+/* Utility spacing so buttons/inputs don't touch */
+.row{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+}
+.row .input{ min-width:220px; }
+.row .btn{ flex-shrink:0; }
+
+/* =================== GROUP CHAT / LOUNGES (messages etc.) =================== */
+.chat .chatHeader{
+  display:flex; align-items:center; justify-content:space-between;
+  margin:10px 0; padding:10px 12px;
+  border-radius:12px;
+  background: rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.12);
+}
+.dot.live{ width:10px; height:10px; border-radius:50%; display:inline-block; background:#7dff9b; box-shadow:0 0 0 3px #7dff9b22; margin-right:8px; }
+.dot.live.off{ background:#ff8b8b; box-shadow:none; }
+
+.chat .messages{
+  height:58vh; min-height:420px;
+  overflow:auto; margin:0; padding:18px;
+  border-radius:14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05));
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow: inset 0 8px 20px rgba(0,0,0,0.18);
+  display:flex; flex-direction:column; gap:12px;
+}
+.chat .msg{ display:flex; }
+.chat .bubble{
+  max-width:80%;
+  padding:12px 14px; border-radius:16px;
+  background: rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.20);
+}
+.chat .msg.me{ justify-content:flex-end; }
+.chat .msg.me .bubble{
+  background: linear-gradient(180deg, #a8d1ff33, #6ea8ff22);
+  border-color: #7db7ff66;
+}
+.chat .meta{ display:flex; gap:8px; font-size:11px; color:var(--muted); margin-bottom:4px; }
+.chat .text{ white-space:pre-wrap; word-break:break-word; font-size:15px; line-height:1.45; }
+
+.composer{
+  display:flex; gap:12px; margin-top:12px;
+  background: rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:14px; padding:10px;
+  box-shadow:0 10px 24px rgba(0,0,0,0.20);
+}
+.composer .input{
+  flex:1;
+  padding:14px 14px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(10,15,25,0.6);
+  font-size:15px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  color: var(--text);
+  caret-color: var(--primary-2);
+}
+.composer .input:focus{
+  border-color:#9fc2ff; box-shadow:0 0 0 3px #9fc2ff22;
+  background: rgba(10,15,25,0.72);
+}
+
+/* Participants roster (chips) */
+#peoplePane{
+  margin: 10px 0 8px 0; padding: 10px 12px;
+  border-radius: 12px; border:1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+}
+.personChip{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 10px; border-radius:999px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+}
+
+/* =================== LIGHT THEME OVERRIDES =================== */
+:root[data-theme="light"]{
+  --bg1:#f6f8fc;
+  --bg2:#eef3fb;
+  --glass:rgba(0,0,0,0.04);
+  --glass-2:rgba(0,0,0,0.10);
+  --text:#0b1220;
+  --muted:#5b6b83;
+  --primary:#2b6de6;
+  --primary-2:#7fb0ff;
+  --card:rgba(255,255,255,0.86);
+  --shadow:0 12px 28px rgba(0,0,0,0.15);
+}
+
+/* Neutral, clean light background (no blue wash) */
+:root[data-theme="light"] body{
+  background: linear-gradient(180deg, #f9fbfe 0%, #ffffff 100%);
+}
+/* Hide decorative blur layer in light mode */
+:root[data-theme="light"] .bg{ display:none; }
+
+/* Header look in light mode */
+:root[data-theme="light"] .fixed-header{
+  background: rgba(255,255,255,0.70);
+  border-bottom:1px solid rgba(0,0,0,0.08);
+  backdrop-filter: blur(10px);
+}
+:root[data-theme="light"] .brand,
+:root[data-theme="light"] .titles h1 { color: var(--text); }
+:root[data-theme="light"] .tagline { color: var(--muted); }
+
+/* Inputs/buttons in light mode */
+:root[data-theme="light"] input.input,
+:root[data-theme="light"] .talk-page .msgInput,
+:root[data-theme="light"] .composer .input{
+  color: var(--text);
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.12);
+}
+:root[data-theme="light"] .input:focus,
+:root[data-theme="light"] .composer .input:focus{
+  box-shadow: 0 0 0 3px rgba(43,109,230,0.18);
+}
+
+/* Selects on Talk page */
+:root[data-theme="light"] .talk-page .select{
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* Pills and rows */
+:root[data-theme="light"] .pill{
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.12);
+  color: var(--text);
+}
+:root[data-theme="light"] .tab{
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.12);
+  color: var(--text);
+}
+:root[data-theme="light"] .loungeRow,
+:root[data-theme="light"] #peoplePane,
+:root[data-theme="light"] .chat .chatHeader,
+:root[data-theme="light"] .composer{
+  background: rgba(255,255,255,0.86);
+  border-color: rgba(0,0,0,0.10);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.10);
+}
+
+/* Messages area light appearance */
+:root[data-theme="light"] .chat .messages{
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: inset 0 6px 16px rgba(0,0,0,0.06);
+}
+:root[data-theme="light"] .chat .bubble{
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.08);
+}
+
+/* === Segmented switch (Message | Video) === */
+.segSwitch{
+  --h: 36px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  width: 240px;
+  height: var(--h);
+  border-radius: 999px;
+  padding: 4px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,0.25);
+}
+.segSwitch input{ position:absolute; opacity:0; pointer-events:none; }
+.segSwitch label{
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: .2px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--muted);
+  transition: color .2s ease;
+  line-height: calc(var(--h) - 8px);
+  border-radius: 999px;
+}
+.segSwitch .knob{
+  position: absolute;
+  z-index: 1;
+  top: 4px; left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #cbe0ff, #8bbcff);
+  box-shadow: 0 10px 22px rgba(139,188,255,0.35);
+  transition: transform .22s ease;
+}
+.segSwitch #modeVid:checked ~ .knob{ transform: translateX(100%); }
+.segSwitch #modeMsg:checked ~ label[for="modeMsg"],
+.segSwitch #modeVid:checked ~ label[for="modeVid"]{
+  color:#0b1220;
+}
+
+/* === Video layout toggle === */
+.videoArea{
+  position: relative;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04));
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.30);
+  aspect-ratio: 16 / 9;
+}
+.remoteVideo, .localVideo{ width:100%; height:100%; object-fit: cover; display:block; }
+.localVideo{
+  position:absolute;
+  width:22%; aspect-ratio:16/9; height:auto;
+  right:10px; bottom:10px;
+  border-radius:12px; overflow:hidden;
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+  cursor: pointer;
+}
+
+/* Side-by-side mode (triggered by clicking your own video) */
+.videoArea.split{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  aspect-ratio: auto;            /* let height grow so each pane can maintain 16:9 */
+  padding: 10px;                 /* small gutter matches gap */
+}
+.videoArea.split .remoteVideo,
+.videoArea.split .localVideo{
+  position: static;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;          /* both panes keep the same AR */
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+}
+
+/* === Talk: side-by-side video layout (no connection required) === */
+.videoArea.sbs{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+  align-items:stretch;
+  height:58vh;            /* same vertical presence as chat area */
+  min-height:420px;
+  aspect-ratio:auto;      /* override the 16:9 container lock */
+  padding:10px;           /* tiny breathing room */
+}
+
+.videoArea.sbs .remoteVideo,
+.videoArea.sbs .localVideo{
+  position:static;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.22);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+  background: rgba(255,255,255,0.06); /* shows even if no stream yet */
+  aspect-ratio: 16 / 9;               /* identical proportions */
+}
+
+/* Keep PiP only when NOT in side-by-side */
+.videoArea:not(.sbs) .localVideo{
+  position:absolute;
+  width:22%;
+  right:10px; bottom:10px;
+  height:auto;
+  aspect-ratio: 16/9;
+  border:1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+}
+
+/* Always put *your* camera on the left in side-by-side mode */
+.videoArea.sbs{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "local remote";
+}
+
+.videoArea.sbs .localVideo{  grid-area: local;  }
+.videoArea.sbs .remoteVideo{ grid-area: remote; }
+
+/* Mirror *your* camera preview everywhere (PiP and side-by-side) */
+.videoArea .localVideo{
+  transform: scaleX(-1);
+  transform-origin: center;
+}
+
+/* Keep the remote feed normal */
+.videoArea .remoteVideo{
+  transform: none;
+}
+
+@media (max-width:720px){
+  .browse-head { grid-template-columns: 1fr !important; }
+  .browse-head > * { justify-self: stretch !important; }
+}
