@@ -166,14 +166,20 @@ if (!document.getElementById('loungePanel')) {
   let lastLounges = []; // latest list from server (used for client-side sorting)
 
   // Use your local PeerJS signaling server (mounted at /peerjs on your Express app)
-  const PEER_OPTS = {
-    host: location.hostname,
-    port: location.port || (location.protocol === 'https:' ? 443 : 80),
-    secure: location.protocol === 'https:',
-    path: '/peerjs',
-    debug: 1
-  };
-  const makePeer = (id) => new Peer(id, PEER_OPTS);
+const PEER_OPTS = {
+  host: location.hostname,
+  // omit port on default 443/80 so the URL is clean
+  port: location.port ? parseInt(location.port, 10) : undefined,
+  secure: location.protocol === 'https:',
+  path: '/peerjs',
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' }
+    ]
+  }
+};
+const makePeer = (id) => new Peer(id, PEER_OPTS);
 
   let searchQuery = ''; // NEW
 
