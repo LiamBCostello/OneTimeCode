@@ -84,14 +84,19 @@
   const SLOT_COUNT = 28; // pool size per (mode, region)
 
   // Use your local PeerJS server mounted at /peerjs
-  const PEER_OPTS = {
-    host: location.hostname,
-    port: location.port || (location.protocol === 'https:' ? 443 : 80),
-    secure: location.protocol === 'https:',
-    path: '/peerjs',
-    debug: 1
-  };
-  const makePeer = (id) => new Peer(id, PEER_OPTS);
+const PEER_OPTS = {
+  host: location.hostname,
+  port: location.port ? parseInt(location.port, 10) : undefined, // omit default ports
+  secure: location.protocol === 'https:',
+  path: '/peerjs',
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' }
+    ]
+  }
+};
+const makePeer = (id) => new Peer(id, PEER_OPTS);
 
   // ---------- UI helpers ----------
   function setConnected(on){
