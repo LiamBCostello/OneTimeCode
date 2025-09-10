@@ -166,19 +166,23 @@ if (!document.getElementById('loungePanel')) {
   let lastLounges = []; // latest list from server (used for client-side sorting)
 
   // Use your local PeerJS signaling server (mounted at /peerjs on your Express app)
-const PEER_OPTS = {
+// Build PeerJS options safely (no :undefined in URL)
+const PEER_OPTS_BASE = {
   host: location.hostname,
-  // omit port on default 443/80 so the URL is clean
-  port: location.port ? parseInt(location.port, 10) : undefined,
   secure: location.protocol === 'https:',
   path: '/peerjs',
   debug: 1,
+  // STUN is fine to keep
   config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' }
-    ]
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   }
 };
+
+// Only add a port if the browser location actually has one (e.g., localhost:3000)
+const PEER_OPTS = location.port
+  ? { ...PEER_OPTS_BASE, port: parseInt(location.port, 10) }
+  : PEER_OPTS_BASE;
+
 const makePeer = (id) => new Peer(id, PEER_OPTS);
 
   let searchQuery = ''; // NEW
