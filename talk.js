@@ -83,19 +83,23 @@
 
   const SLOT_COUNT = 28; // pool size per (mode, region)
 
-  // Use your local PeerJS server mounted at /peerjs
-const PEER_OPTS = {
+// Build PeerJS options safely (no :undefined in URL)
+const PEER_OPTS_BASE = {
   host: location.hostname,
-  port: location.port ? parseInt(location.port, 10) : undefined, // omit default ports
   secure: location.protocol === 'https:',
   path: '/peerjs',
   debug: 1,
+  // STUN is fine to keep
   config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' }
-    ]
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   }
 };
+
+// Only add a port if the browser location actually has one (e.g., localhost:3000)
+const PEER_OPTS = location.port
+  ? { ...PEER_OPTS_BASE, port: parseInt(location.port, 10) }
+  : PEER_OPTS_BASE;
+
 const makePeer = (id) => new Peer(id, PEER_OPTS);
 
   // ---------- UI helpers ----------
