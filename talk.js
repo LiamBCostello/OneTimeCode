@@ -189,12 +189,6 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     return arr;
   }
 
-  function fixedSlotIdForCurrent(){
-  const base = mode === 'video' ? 'onetime-talk-video' : 'onetime-talk-text';
-  const prefix = (filter === 'all') ? base : `${base}-${filter}`;
-  return `${prefix}-0`; // everyone falls back to index 0
-}
-
   function resetAll(){
     try {
       if (mediaCall) { try { mediaCall.close(); } catch {} }
