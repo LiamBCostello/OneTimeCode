@@ -236,7 +236,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     }
   }
 
-  async function startMatching(){
+async function startMatching(){
   cancelled = false;
   setConnected(false);
   setStatus('Looking for a partner…');
@@ -291,41 +291,6 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
       }
     }
   }
-}
-
-  // ---- Phase B: DETERMINISTIC FALLBACK (everyone converges here) ----
-  const fixedSlot = fixedSlotIdForCurrent();
-
-  // Try to become the host of the fixed slot…
-  const hosted = await tryBecomeHost(fixedSlot);
-  if (hosted){
-    // We are now the well-known host for this mode/region.
-    setStatus('Waiting for a partner…');
-    appendMessage({system:true, text:'You are now connected once someone joins.'});
-    return;
-  }
-
-  // If hosting failed, it means someone else won the race.
-  // Immediately connect to that same fixed slot.
-  const joined = await tryConnectToHost(fixedSlot, 1200);
-  if (joined === 'connected'){
-    setStatus('Matched!');
-    setConnected(true);
-    if (mode === 'video'){
-      const stream = await ensureLocalMedia();
-      if (stream && !mediaCall){
-        try {
-          mediaCall = peer.call(currentSlot, stream);
-          wireMediaEvents(mediaCall);
-        } catch {}
-      }
-    }
-    return;
-  }
-
-  // If we get here, something transient happened — try again from the top.
-  startMatching();
-}
 
   // If we’re here, either we preferred hosting or scanning found nobody quickly → host now.
   const hostSlot = order[0];
