@@ -236,23 +236,19 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     }
   }
 
-async function startMatching(){
+  async function startMatching(){
   cancelled = false;
   setConnected(false);
   setStatus('Looking for a partner…');
 
-  // Prompt for camera/mic immediately if we’re in Video mode (restores the permission dialog + local preview)
+  // If user chose Video, ask for media up-front (permission + local preview)
   if (mode === 'video'){
     const ok = await ensureLocalMedia();
-    if (!ok){
-      mode = 'text';
-      updateModeUI();
-    }
+    if (!ok){ mode = 'text'; updateModeUI(); }
   }
 
-  // Create an ephemeral peer for discovery
+  // Create our PeerJS instance
   peer = makePeer(undefined);
-
   await new Promise(res => {
     let done = false;
     peer.on('open', () => { if(!done){ done=true; res(); } });
@@ -260,7 +256,7 @@ async function startMatching(){
   });
   if (cancelled) return;
 
-  // Be ready to answer media calls when in Video mode
+  // Always be ready to answer media calls when in Video mode
   peer.on('call', async (call) => {
     if (mode !== 'video') { try{ call.close(); }catch{}; return; }
     const stream = await ensureLocalMedia();
@@ -270,30 +266,32 @@ async function startMatching(){
     wireMediaEvents(mediaCall);
   });
 
-  // ---- Phase A: QUICK PROBE of a few random slots (fast timeouts) ----
+  // Shuffle candidate slots for this (mode, filter)
   const order = shuffle(slotIdsForFilter(filter));
-  const PROBE = 6;            // try only a few first
-  const PER   = 250;          // per-slot timeout (ms)
 
-  for (let i = 0; i < Math.min(PROBE, order.length); i++){
-    if (cancelled) return;
-    setStatus(`Checking slot ${order[i].split('-').pop()}…`);
-    const attempt = await tryConnectToHost(order[i], PER);
-    if (attempt === 'connected'){
-      setStatus('Matched!');
-      setConnected(true);
-      if (mode === 'video'){
-        const stream = await ensureLocalMedia();
-        if (stream && !mediaCall){
-          try {
-            mediaCall = peer.call(currentSlot, stream);
-            wireMediaEvents(mediaCall);
-          } catch {}
+  // Flip a coin: half of users will *host immediately*, the other half will *scan fast*.
+  const preferHost = Math.random() < 0.5;
+
+  // Fast client scan (parallel batches). If we find someone, we're done.
+  if (!preferHost){
+    for (let i = 0; i < order.length && !cancelled; i += BATCH_SIZE){
+      const batch = order.slice(i, i + BATCH_SIZE);
+      setStatus(`Scanning slots ${batch.map(s=>s.split('-').pop()).join(', ')}…`);
+      const result = await tryConnectBatch(batch, CONNECT_TIMEOUT_MS);
+      if (result === 'connected'){
+        setStatus('Matched!');
+        setConnected(true);
+        if (mode === 'video'){
+          const stream = await ensureLocalMedia();
+          if (stream && !mediaCall){
+            try { mediaCall = peer.call(currentSlot, stream); wireMediaEvents(mediaCall); } catch {}
+          }
         }
+        return;
       }
-      return;
     }
   }
+}
 
   // ---- Phase B: DETERMINISTIC FALLBACK (everyone converges here) ----
   const fixedSlot = fixedSlotIdForCurrent();
