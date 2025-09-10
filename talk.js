@@ -426,46 +426,58 @@ function tryConnectToHost(slotId, ms) {
   });
 }
 
-  function tryBecomeHost(slotId){
-    return new Promise(resolve => {
-      try{ peer && peer.destroy(); }catch{}
-      isHost = true;
-      currentSlot = slotId;
-      peer = makePeer(slotId);
-      attachCallHandler(peer);
-      let resolved = false;
-      const done = (ok) => { if(resolved) return; resolved = true; resolve(ok); };
+function tryBecomeHost(slotId){
+  return new Promise(resolve => {
+    try { if (peer) peer.destroy(); } catch {}
+    isHost = true;
+    currentSlot = slotId;
+    peer = makePeer(slotId);
 
-      peer.on('open', () => {
-        peer.on('connection', (c) => {
-          if(conn && conn.open){ try{ c.close(); }catch{}; return; }
-          conn = c;
-          conn.on('open', () => {
-            setConnected(true);
-            setStatus('Matched!');
-            appendMessage({system:true, text:'Partner joined.'});
+    // IMPORTANT: when we create a new Peer, we must re-attach the media call handler
+    peer.on('call', async (call) => {
+      if (mode !== 'video') { try { call.close(); } catch {} return; }
+      const stream = await ensureLocalMedia();
+      if (!stream) { try { call.close(); } catch {} return; }
+      mediaCall = call;
+      try { mediaCall.answer(stream); } catch {}
+      wireMediaEvents(mediaCall);   // <-- use the function you already have
+    });
 
-            conversationStartMode = mode;
+    let resolved = false;
+    const done = (ok) => { if (resolved) return; resolved = true; resolve(ok); };
 
-            conn.on('data', onData);
-            conn.on('close', () => {
-              appendMessage({system:true, text:'Stranger disconnected.'});
-              setConnected(false);
-              setStatus('Partner left. Press Space or click Next.');
-              if (mediaCall) { try { mediaCall.close(); } catch {} mediaCall = null; }
-              clearVideoEls(); stopStreams();
-              localSwitchRequest = null; remoteSwitchRequest = null;
-              refreshConsentButtonLabels();
-            });
-            conn.on('error', () => {});
+    peer.on('open', () => {
+      // Accept first data connection as the host
+      peer.on('connection', (c) => {
+        if (conn && conn.open) { try { c.close(); } catch {} return; }
+        conn = c;
+        conn.on('open', () => {
+          setConnected(true);
+          setStatus('Matched!');
+          appendMessage({ system:true, text:'Partner joined.' });
+
+          conversationStartMode = mode;
+
+          conn.on('data', onData);
+          conn.on('close', () => {
+            appendMessage({system:true, text:'Stranger disconnected.'});
+            setConnected(false);
+            setStatus('Partner left. Press Space or click Next.');
+            if (mediaCall) { try { mediaCall.close(); } catch {} mediaCall = null; }
+            clearVideoEls(); stopStreams();
+            localSwitchRequest = null; remoteSwitchRequest = null;
+            refreshConsentButtonLabels();
           });
+          conn.on('error', () => {});
         });
-        done(true);
       });
 
-      peer.on('error', () => { done(false); });
+      done(true);
     });
-  }
+
+    peer.on('error', () => { done(false); });
+  });
+}
 
   // ---------- Data handling ----------
   function onData(raw){
