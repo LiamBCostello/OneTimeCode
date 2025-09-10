@@ -21,8 +21,10 @@
 
   const msgTemplate = $('#msgTemplate');
 
-  // near the top with other consts
-  const SLOT_CONNECT_TIMEOUT_MS = 7000;  // 7s is a good default; go 10000 if needed
+// Fast matching tunables
+  const CONNECT_TIMEOUT_MS = 160;  // very short per-slot timeout
+  const BATCH_SIZE = 6;            // probe this many slots at once
+
 
   // ---- Dynamically add switch bars (no HTML edits needed) ----
   let videoSwitchBar, requestTextBtn;   // visible in VIDEO mode
@@ -234,89 +236,85 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     }
   }
 
-  async function startMatching(){
-    cancelled = false;
-    setConnected(false);
-    setStatus('Looking for a partner…');
+async function startMatching(){
+  cancelled = false;
+  setConnected(false);
+  setStatus('Looking for a partner…');
 
-    // IMPORTANT: Prompt for camera/mic immediately in Video mode (restores permission dialog + local preview)
-    if (mode === 'video'){
-      const ok = await ensureLocalMedia();
-      if (!ok){
-        // fall back to text immediately
-        mode = 'text';
-        updateModeUI();
-      }
-    }
-
-    // Create peer
-    peer = makePeer(undefined);
-
-    await new Promise(res => {
-      let done = false;
-      peer.on('open', () => { if(!done){ done=true; res(); } });
-      peer.on('error', () => { if(!done){ done=true; res(); } });
-    });
-    if (cancelled) return;
-
-    // Prepare to answer media calls when in Video mode
-    peer.on('call', async (call) => {
-      if (mode !== 'video') { try{ call.close(); }catch{}; return; }
-      const stream = await ensureLocalMedia();
-      if (!stream) { try{ call.close(); }catch{}; return; }
-      mediaCall = call;
-      try { mediaCall.answer(stream); } catch {}
-      wireMediaEvents(mediaCall);
-    });
-
-    // Phase 1 — try connecting to an existing host
-    const order = shuffle(slotIdsForFilter(filter));
-    for (const slot of order){
-      if (cancelled) return;
-      setStatus(`Checking slot ${slot.split('-').pop()}…`);
-      const attempt = await tryConnectToHost(slot, SLOT_CONNECT_TIMEOUT_MS);
-      if (attempt === 'connected'){
-        setStatus('Matched!');
-        setConnected(true);
-        if (mode === 'video'){
-          const stream = await ensureLocalMedia();
-          if (stream && !mediaCall){
-            try {
-              mediaCall = peer.call(currentSlot, stream);
-              wireMediaEvents(mediaCall);
-            } catch {}
-          }
-        }
-        return;
-      }
-    }
-
-    // Phase 2 — become host
-    if (cancelled) return;
-    const hostSlot = order[0];
-    const ok = await tryBecomeHost(hostSlot);
-    if (!ok){
-      const fallback = await tryConnectToHost(hostSlot, SLOT_CONNECT_TIMEOUT_MS);
-      if (fallback === 'connected'){
-        setStatus('Matched!');
-        setConnected(true);
-        if (mode === 'video'){
-          const stream = await ensureLocalMedia();
-          if (stream && !mediaCall){
-            try {
-              mediaCall = peer.call(currentSlot, stream);
-              wireMediaEvents(mediaCall);
-            } catch {}
-          }
-        }
-        return;
-      }
-      return startMatching();
-    }
-
-    setStatus('Waiting for a partner…');
-    appendMessage({system:true, text:'You are now connected once someone joins.'});
+  // If user chose Video, ask for media up-front (permission + local preview)
+  if (mode === 'video'){
+    const ok = await ensureLocalMedia();
+    if (!ok){ mode = 'text'; updateModeUI(); }
   }
+
+  // Create our PeerJS instance
+  peer = makePeer(undefined);
+  await new Promise(res => {
+    let done = false;
+    peer.on('open', () => { if(!done){ done=true; res(); } });
+    peer.on('error', () => { if(!done){ done=true; res(); } });
+  });
+  if (cancelled) return;
+
+  // Always be ready to answer media calls when in Video mode
+  peer.on('call', async (call) => {
+    if (mode !== 'video') { try{ call.close(); }catch{}; return; }
+    const stream = await ensureLocalMedia();
+    if (!stream) { try{ call.close(); }catch{}; return; }
+    mediaCall = call;
+    try { mediaCall.answer(stream); } catch {}
+    wireMediaEvents(mediaCall);
+  });
+
+  // Shuffle candidate slots for this (mode, filter)
+  const order = shuffle(slotIdsForFilter(filter));
+
+  // Flip a coin: half of users will *host immediately*, the other half will *scan fast*.
+  const preferHost = Math.random() < 0.5;
+
+  // Fast client scan (parallel batches). If we find someone, we're done.
+  if (!preferHost){
+    for (let i = 0; i < order.length && !cancelled; i += BATCH_SIZE){
+      const batch = order.slice(i, i + BATCH_SIZE);
+      setStatus(`Scanning slots ${batch.map(s=>s.split('-').pop()).join(', ')}…`);
+      const result = await tryConnectBatch(batch, CONNECT_TIMEOUT_MS);
+      if (result === 'connected'){
+        setStatus('Matched!');
+        setConnected(true);
+        if (mode === 'video'){
+          const stream = await ensureLocalMedia();
+          if (stream && !mediaCall){
+            try { mediaCall = peer.call(currentSlot, stream); wireMediaEvents(mediaCall); } catch {}
+          }
+        }
+        return;
+      }
+    }
+  }
+
+  // If we’re here, either we preferred hosting or scanning found nobody quickly → host now.
+  const hostSlot = order[0];
+  const ok = await tryBecomeHost(hostSlot);
+  if (!ok){
+    // Rare: race to claim the same slot. Do one more quick batch scan, then recurse.
+    const result = await tryConnectBatch(order.slice(0, BATCH_SIZE), CONNECT_TIMEOUT_MS);
+    if (result === 'connected'){
+      setStatus('Matched!');
+      setConnected(true);
+      if (mode === 'video'){
+        const stream = await ensureLocalMedia();
+        if (stream && !mediaCall){
+          try { mediaCall = peer.call(currentSlot, stream); wireMediaEvents(mediaCall); } catch {}
+        }
+      }
+      return;
+    }
+    return startMatching(); // try again with a fresh shuffle
+  }
+
+  setStatus('Waiting for a partner…');
+  appendMessage({system:true, text:'You are now connected when someone joins.'});
+}
 
   function wireMediaEvents(call){
     call.on('stream', (remote) => {
@@ -332,6 +330,62 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
       appendMessage({system:true, text:'Video call error.'});
     });
   }
+
+  function tryConnectBatch(slots, ms){
+  return new Promise(resolve => {
+    if (!peer || peer.destroyed || !slots.length) return resolve('failed');
+
+    let resolved = false;
+    const conns = [];
+    const done = (result) => {
+      if (resolved) return;
+      resolved = true;
+      // Close all still-pending connections
+      for (const c of conns){ try { if (!c.open) c.close(); } catch {} }
+      resolve(result);
+    };
+
+    // Start a watchdog to finish the batch quickly
+    const timer = setTimeout(() => done('none'), ms);
+
+    for (const slotId of slots){
+      try {
+        const c = peer.connect(slotId, { reliable: true });
+        conns.push(c);
+
+        c.on('open', () => {
+          if (resolved) return;
+          clearTimeout(timer);
+          conn = c;
+          isHost = false;
+          currentSlot = slotId;
+
+          // record how the conversation started
+          conversationStartMode = mode;
+
+          conn.on('data', onData);
+          conn.on('close', () => {
+            appendMessage({system:true, text:'Stranger disconnected.'});
+            setConnected(false);
+            setStatus('Partner left. Press Space or click Next.');
+            if (mediaCall) { try { mediaCall.close(); } catch {} mediaCall = null; }
+            clearVideoEls(); stopStreams();
+            localSwitchRequest = null; remoteSwitchRequest = null;
+            refreshConsentButtonLabels();
+          });
+          conn.on('error', () => {});
+          done('connected');
+        });
+
+        c.on('error', () => {
+          // if all fail, the timer will fire; no need to do anything here
+        });
+      } catch {
+        // ignore and let timer resolve
+      }
+    }
+  });
+}
 
 function tryConnectToHost(slotId, ms) {
   return new Promise(resolve => {
