@@ -21,6 +21,9 @@
 
   const msgTemplate = $('#msgTemplate');
 
+  // near the top with other consts
+  const SLOT_CONNECT_TIMEOUT_MS = 7000;  // 7s is a good default; go 10000 if needed
+
   // ---- Dynamically add switch bars (no HTML edits needed) ----
   let videoSwitchBar, requestTextBtn;   // visible in VIDEO mode
   let textSwitchBar,  requestVideoBtn;  // visible in MESSAGE mode
@@ -271,7 +274,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     for (const slot of order){
       if (cancelled) return;
       setStatus(`Checking slot ${slot.split('-').pop()}…`);
-      const attempt = await tryConnectToHost(slot, 420);
+      const attempt = await tryConnectToHost(slot, SLOT_CONNECT_TIMEOUT_MS);
       if (attempt === 'connected'){
         setStatus('Matched!');
         setConnected(true);
@@ -293,7 +296,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     const hostSlot = order[0];
     const ok = await tryBecomeHost(hostSlot);
     if (!ok){
-      const fallback = await tryConnectToHost(hostSlot, 800);
+      const fallback = await tryConnectToHost(hostSlot, SLOT_CONNECT_TIMEOUT_MS);
       if (fallback === 'connected'){
         setStatus('Matched!');
         setConnected(true);
@@ -330,41 +333,44 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     });
   }
 
-  function tryConnectToHost(slotId, ms){
-    return new Promise(resolve => {
-      if(!peer || peer.destroyed) return resolve('failed');
-      let resolved = false;
-      const c = peer.connect(slotId, { reliable: true });
+function tryConnectToHost(slotId, ms) {
+  return new Promise(resolve => {
+    if (!peer || peer.destroyed) return resolve('failed');
+    let resolved = false;
+    const done = (result) => { if (resolved) return; resolved = true; resolve(result); };
 
-      const done = (result) => { if(resolved) return; resolved = true; resolve(result); };
-      const timer = setTimeout(() => { try{ c.close(); }catch{}; done('timeout'); }, ms);
+    const c = peer.connect(slotId, { reliable: true });
 
-      c.on('open', () => {
-        clearTimeout(timer);
-        conn = c;
-        isHost = false;
-        currentSlot = slotId;
+    // If the server says the peer doesn't exist or connection fails early, move on quickly
+    c.on('error', () => { done('error'); });
 
-        // Record how this conversation started (message vs video)
-        conversationStartMode = mode;
+    // Only give up after a proper ICE window
+    const timer = setTimeout(() => { try { c.close(); } catch {} done('timeout'); }, ms);
 
-        conn.on('data', onData);
-        conn.on('close', () => {
-          appendMessage({system:true, text:'Stranger disconnected.'});
-          setConnected(false);
-          setStatus('Partner left. Press Space or click Next.');
-          if (mediaCall) { try { mediaCall.close(); } catch {} mediaCall = null; }
-          clearVideoEls(); stopStreams();
-          localSwitchRequest = null; remoteSwitchRequest = null;
-          refreshConsentButtonLabels();
-        });
-        conn.on('error', () => {});
-        done('connected');
+    c.on('open', () => {
+      clearTimeout(timer);
+      conn = c;
+      isHost = false;
+      currentSlot = slotId;
+
+      // record how this conversation began (used by your Next/Space logic)
+      conversationStartMode = mode;
+
+      conn.on('data', onData);
+      conn.on('close', () => {
+        appendMessage({system:true, text:'Stranger disconnected.'});
+        setConnected(false);
+        setStatus('Partner left. Press Space or click Next.');
+        if (mediaCall) { try { mediaCall.close(); } catch {} mediaCall = null; }
+        clearVideoEls(); stopStreams();
+        localSwitchRequest = null; remoteSwitchRequest = null;
+        refreshConsentButtonLabels();
       });
-
-      c.on('error', () => { /* timer resolves */ });
+      conn.on('error', () => {});
+      done('connected');
     });
-  }
+  });
+}
 
   function tryBecomeHost(slotId){
     return new Promise(resolve => {
@@ -372,6 +378,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
       isHost = true;
       currentSlot = slotId;
       peer = makePeer(slotId);
+      attachCallHandler(peer);
       let resolved = false;
       const done = (ok) => { if(resolved) return; resolved = true; resolve(ok); };
 
