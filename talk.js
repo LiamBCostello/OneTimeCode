@@ -189,6 +189,12 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     return arr;
   }
 
+  function fixedSlotIdForCurrent(){
+  const base = mode === 'video' ? 'onetime-talk-video' : 'onetime-talk-text';
+  const prefix = (filter === 'all') ? base : `${base}-${filter}`;
+  return `${prefix}-0`; // everyone falls back to index 0
+}
+
   function resetAll(){
     try {
       if (mediaCall) { try { mediaCall.close(); } catch {} }
@@ -241,14 +247,18 @@ async function startMatching(){
   setConnected(false);
   setStatus('Looking for a partner…');
 
-  // If user chose Video, ask for media up-front (permission + local preview)
+  // Prompt for camera/mic immediately if we’re in Video mode (restores the permission dialog + local preview)
   if (mode === 'video'){
     const ok = await ensureLocalMedia();
-    if (!ok){ mode = 'text'; updateModeUI(); }
+    if (!ok){
+      mode = 'text';
+      updateModeUI();
+    }
   }
 
-  // Create our PeerJS instance
+  // Create an ephemeral peer for discovery
   peer = makePeer(undefined);
+
   await new Promise(res => {
     let done = false;
     peer.on('open', () => { if(!done){ done=true; res(); } });
@@ -256,7 +266,7 @@ async function startMatching(){
   });
   if (cancelled) return;
 
-  // Always be ready to answer media calls when in Video mode
+  // Be ready to answer media calls when in Video mode
   peer.on('call', async (call) => {
     if (mode !== 'video') { try{ call.close(); }catch{}; return; }
     const stream = await ensureLocalMedia();
@@ -266,31 +276,64 @@ async function startMatching(){
     wireMediaEvents(mediaCall);
   });
 
-  // Shuffle candidate slots for this (mode, filter)
+  // ---- Phase A: QUICK PROBE of a few random slots (fast timeouts) ----
   const order = shuffle(slotIdsForFilter(filter));
+  const PROBE = 6;            // try only a few first
+  const PER   = 250;          // per-slot timeout (ms)
 
-  // Flip a coin: half of users will *host immediately*, the other half will *scan fast*.
-  const preferHost = Math.random() < 0.5;
-
-  // Fast client scan (parallel batches). If we find someone, we're done.
-  if (!preferHost){
-    for (let i = 0; i < order.length && !cancelled; i += BATCH_SIZE){
-      const batch = order.slice(i, i + BATCH_SIZE);
-      setStatus(`Scanning slots ${batch.map(s=>s.split('-').pop()).join(', ')}…`);
-      const result = await tryConnectBatch(batch, CONNECT_TIMEOUT_MS);
-      if (result === 'connected'){
-        setStatus('Matched!');
-        setConnected(true);
-        if (mode === 'video'){
-          const stream = await ensureLocalMedia();
-          if (stream && !mediaCall){
-            try { mediaCall = peer.call(currentSlot, stream); wireMediaEvents(mediaCall); } catch {}
-          }
+  for (let i = 0; i < Math.min(PROBE, order.length); i++){
+    if (cancelled) return;
+    setStatus(`Checking slot ${order[i].split('-').pop()}…`);
+    const attempt = await tryConnectToHost(order[i], PER);
+    if (attempt === 'connected'){
+      setStatus('Matched!');
+      setConnected(true);
+      if (mode === 'video'){
+        const stream = await ensureLocalMedia();
+        if (stream && !mediaCall){
+          try {
+            mediaCall = peer.call(currentSlot, stream);
+            wireMediaEvents(mediaCall);
+          } catch {}
         }
-        return;
       }
+      return;
     }
   }
+
+  // ---- Phase B: DETERMINISTIC FALLBACK (everyone converges here) ----
+  const fixedSlot = fixedSlotIdForCurrent();
+
+  // Try to become the host of the fixed slot…
+  const hosted = await tryBecomeHost(fixedSlot);
+  if (hosted){
+    // We are now the well-known host for this mode/region.
+    setStatus('Waiting for a partner…');
+    appendMessage({system:true, text:'You are now connected once someone joins.'});
+    return;
+  }
+
+  // If hosting failed, it means someone else won the race.
+  // Immediately connect to that same fixed slot.
+  const joined = await tryConnectToHost(fixedSlot, 1200);
+  if (joined === 'connected'){
+    setStatus('Matched!');
+    setConnected(true);
+    if (mode === 'video'){
+      const stream = await ensureLocalMedia();
+      if (stream && !mediaCall){
+        try {
+          mediaCall = peer.call(currentSlot, stream);
+          wireMediaEvents(mediaCall);
+        } catch {}
+      }
+    }
+    return;
+  }
+
+  // If we get here, something transient happened — try again from the top.
+  startMatching();
+}
 
   // If we’re here, either we preferred hosting or scanning found nobody quickly → host now.
   const hostSlot = order[0];
