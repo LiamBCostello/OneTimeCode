@@ -166,6 +166,24 @@
         </div>
       </div>
 
+      <!-- Lounge mode switch (like Talk) -->
+<div class="modebar">
+  <h2 class="mode-heading"><span id="lgModeHeading">Message Chat</span></h2>
+
+  <div class="segSwitch" role="tablist" aria-label="Lounge mode">
+    <input type="radio" name="lgmode" id="lgModeMsg" checked aria-selected="true" />
+    <label for="lgModeMsg">Message</label>
+
+    <input type="radio" name="lgmode" id="lgModeVid" aria-selected="false" />
+    <label for="lgModeVid">Video</label>
+
+    <span class="knob" aria-hidden="true"></span>
+  </div>
+</div>
+
+<!-- Multi-party video grid -->
+<div id="videoGrid" class="videoGrid hidden" aria-live="polite"></div>
+
       <ul id="messages" class="messages" role="log"></ul>
 
       <form id="composer" class="composer" autocomplete="off">
