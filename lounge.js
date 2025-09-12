@@ -40,6 +40,67 @@ if (!document.getElementById('loungePanel')) {
   const leaveBtn = $('#leaveBtn');
   const msgTemplate = $('#msgTemplate');
 
+  // ---- (NEW) Lounge video UI injected dynamically ----
+  let lgModeHeading = $('#lgModeHeading');
+  let lgModeMsg     = $('#lgModeMsg');
+  let lgModeVid     = $('#lgModeVid');
+  let videoGrid     = $('#videoGrid');
+
+  function ensureVideoUI(){
+    if (lgModeHeading && lgModeMsg && lgModeVid && videoGrid) return;
+    const host = messagesEl?.parentElement || chat;
+
+    // Mode bar
+    const modebar = document.createElement('div');
+    modebar.className = 'modebar';
+    modebar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin:8px 0 12px 0;';
+    modebar.innerHTML = `
+      <h2 class="mode-heading" style="margin:0;font-weight:800;"><span id="lgModeHeading">Message Chat</span></h2>
+      <div class="segSwitch" role="tablist" aria-label="Lounge mode" style="display:inline-flex;gap:0;border:1px solid rgba(255,255,255,0.15);border-radius:999px;overflow:hidden;">
+        <label style="padding:6px 12px;cursor:pointer;user-select:none;">
+          <input type="radio" name="lgmode" id="lgModeMsg" checked style="display:none;">
+          <span>Message</span>
+        </label>
+        <label style="padding:6px 12px;cursor:pointer;user-select:none;border-left:1px solid rgba(255,255,255,0.12);">
+          <input type="radio" name="lgmode" id="lgModeVid" style="display:none;">
+          <span>Video</span>
+        </label>
+      </div>
+    `;
+    host.insertBefore(modebar, messagesEl);
+
+    // Video grid
+    const grid = document.createElement('div');
+    grid.id = 'videoGrid';
+    grid.className = 'videoGrid';
+    grid.style.cssText = `
+      display:none;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap:12px; height:58vh; min-height:420px; padding:10px; aspect-ratio:auto;
+    `;
+    host.insertBefore(grid, messagesEl);
+
+    // bind refs
+    lgModeHeading = $('#lgModeHeading');
+    lgModeMsg     = $('#lgModeMsg');
+    lgModeVid     = $('#lgModeVid');
+    videoGrid     = $('#videoGrid');
+
+    // listeners (bound once)
+    lgModeMsg?.addEventListener('change', () => {
+      if (!lgModeMsg.checked) return;
+      loungeMode = 'text';
+      updateLoungeModeUI();
+      stopAllMedia();
+    });
+    lgModeVid?.addEventListener('change', async () => {
+      if (!lgModeVid.checked) return;
+      loungeMode = 'video';
+      updateLoungeModeUI();
+      await syncMediaWithRoster();
+    });
+  }
+
   // Key chip (shown when private)
   let keyChip = null;
   function formatKey(k){ return k && k.length === 10 ? `${k.slice(0,5)}-${k.slice(5)}` : k; }
@@ -165,25 +226,28 @@ if (!document.getElementById('loungePanel')) {
 
   let lastLounges = []; // latest list from server (used for client-side sorting)
 
+  // ---- (NEW) Multi-party video state ----
+  let loungeMode = 'text';             // 'text' | 'video'
+  let localStream = null;
+  const mediaCalls = new Map();        // peerId -> MediaConnection
+  const videoTiles = new Map();        // peerId -> { el, name }
+  let lastRoster = [];                 // from host
+
   // Use your local PeerJS signaling server (mounted at /peerjs on your Express app)
-// Build PeerJS options safely (no :undefined in URL)
-const PEER_OPTS_BASE = {
-  host: location.hostname,
-  secure: location.protocol === 'https:',
-  path: '/peerjs',
-  debug: 1,
-  // STUN is fine to keep
-  config: {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  }
-};
-
-// Only add a port if the browser location actually has one (e.g., localhost:3000)
-const PEER_OPTS = location.port
-  ? { ...PEER_OPTS_BASE, port: parseInt(location.port, 10) }
-  : PEER_OPTS_BASE;
-
-const makePeer = (id) => new Peer(id, PEER_OPTS);
+  // Build PeerJS options safely (no :undefined in URL)
+  const PEER_OPTS_BASE = {
+    host: location.hostname,
+    secure: location.protocol === 'https:',
+    path: '/peerjs',
+    debug: 1,
+    config: {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    }
+  };
+  const PEER_OPTS = location.port
+    ? { ...PEER_OPTS_BASE, port: parseInt(location.port, 10) }
+    : PEER_OPTS_BASE;
+  const makePeer = (id) => new Peer(id, PEER_OPTS);
 
   let searchQuery = ''; // NEW
 
@@ -211,7 +275,14 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     messagesEl.appendChild(li);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
-  function showChatUI(){ setup.classList.add('hidden'); chat.classList.remove('hidden'); ensurePeoplePane(); renderPeople(); updateKeyChip(); }
+  function showChatUI(){
+    setup.classList.add('hidden');
+    chat.classList.remove('hidden');
+    ensurePeoplePane();
+    ensureVideoUI();
+    renderPeople();
+    updateKeyChip();
+  }
   function showSetupUI(){ chat.classList.add('hidden'); setup.classList.remove('hidden'); updateKeyChip(); }
 
   function slugify(name){
@@ -594,8 +665,24 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
   });
 
   // ====== PeerJS wiring ======
+  function attachMediaAnswering(p){
+    if (!p) return;
+    p.on('call', async (call) => {
+      if (loungeMode !== 'video') { try{ call.close(); }catch{}; return; }
+      const stream = await ensureLocalMedia();
+      if (!stream) { try{ call.close(); }catch{}; return; }
+
+      mediaCalls.set(call.peer, call);
+      try { call.answer(stream); } catch {}
+      call.on('stream', (remote) => upsertRemoteTile(call.peer, nameForPeer(call.peer), remote));
+      call.on('close',  () => teardownPeerMedia(call.peer));
+      call.on('error',  () => teardownPeerMedia(call.peer));
+    });
+  }
+
   function joinOrAutoHost(hId, theSlug){
     peer = makePeer(undefined);
+    attachMediaAnswering(peer);
 
     peer.on('open', () => {
       const c = peer.connect(hId, { reliable: true });
@@ -618,6 +705,8 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
         appendMessage({system:true, text:`Joined “${loungeName}”.`});
         safeSend(conn, {type:'intro', name: nickname});
         clearTimeout(decideTimer);
+        // if already in video mode, kick media sync
+        if (loungeMode === 'video') syncMediaWithRoster();
       });
 
       c.on('error', () => { /* decideTimer may promote to host */ });
@@ -634,6 +723,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     slug = theSlug;
     hostId = hId;
     peer = makePeer(hId);
+    attachMediaAnswering(peer);
 
     peer.on('open', async () => {
       setConnected(true);
@@ -648,8 +738,11 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
         heartbeatTimer = setInterval(sendHeartbeat, 10_000);
       }
 
-      peersMeta.set('self', { name: nickname });
+      // track own name under real peer id
+      if (peer?.id) peersMeta.set(peer.id, { name: nickname });
       renderPeople();
+
+      if (loungeMode === 'video') { await syncMediaWithRoster(); }
     });
 
     configureHostEventHandlers();
@@ -676,6 +769,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
         const name = peersMeta.get(c.peer)?.name || c.peer;
         appendMessage({system:true, text:`${name} left.`});
         peersMeta.delete(c.peer); conns.delete(c.peer);
+        teardownPeerMedia(c.peer);                 // <-- remove their video
         sendRoster();
         sendHeartbeatSoon();
       });
@@ -703,13 +797,14 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
 
     try {
       const newPeer = makePeer(hostId);
+      attachMediaAnswering(newPeer);
       newPeer.on('open', async () => {
         try { peer?.destroy?.(); } catch {}
         peer = newPeer; isHost = true;
         appendMessage({system:true, text:'Host changed — you are now the host.'});
         setConnected(true);
 
-        if (!peersMeta.has('self')) peersMeta.set('self', { name: nickname });
+        if (peer?.id && !peersMeta.has(peer.id)) peersMeta.set(peer.id, { name: nickname });
 
         if (listPublic){
           await API.upsertPublic(slug, loungeName, !!isPrivate);
@@ -720,6 +815,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
 
         configureHostEventHandlers();
         sendRoster();
+        if (loungeMode === 'video') { await syncMediaWithRoster(); }
         electionInProgress = false;
       });
 
@@ -736,6 +832,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
   async function reconnectToHost(){
     try { peer?.destroy?.(); } catch {}
     peer = makePeer(undefined);
+    attachMediaAnswering(peer);
     await new Promise(res => peer.on('open', res));
     const c = peer.connect(hostId, { reliable: true });
     c.on('open', () => {
@@ -744,6 +841,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
       appendMessage({system:true, text:'Reconnected to the new host.'});
       wireGuestConnEvents(conn);
       safeSend(conn, {type:'intro', name: nickname});
+      if (loungeMode === 'video') { syncMediaWithRoster(); }
     });
     c.on('error', () => {});
   }
@@ -782,28 +880,31 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
     renderPeople();
   }
 
+  // (UPDATED) include real peer id for self; de-dupe by id
   function computeRoster(){
-    const out = [];
-    out.push({ id:'self', name: nickname, you:true });
+    const myId = peer?.id || 'self';
+    const out = [{ id: myId, name: nickname, you:true }];
     for (const [pid, meta] of peersMeta){
-      if (pid === 'self') continue;
       if (!conns.has(pid)) continue;
       out.push({ id: pid, name: meta?.name || `Guest-${pid.slice(0,4)}` });
     }
     const seen = new Set();
     return out.filter(m => {
-      const key = m.name.toLowerCase();
+      const key = m.id || m.name;
       if (seen.has(key)) return false;
       seen.add(key); return true;
     });
   }
 
+  // (UPDATED) track roster + drive media
   function applyRoster(members){
+    lastRoster = Array.isArray(members) ? members : [];
     peersMeta.clear();
-    for (const m of members){
+    for (const m of lastRoster){
       peersMeta.set(m.id || m.name, { name: m.name });
     }
     renderPeople();
+    if (loungeMode === 'video') { syncMediaWithRoster(); }
   }
 
   function broadcast(payload, exceptPeerId){
@@ -829,6 +930,111 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
   async function cleanupPresence(){
     clearInterval(heartbeatTimer); heartbeatTimer = null;
     if (slug && listPublic) await API.presenceLeave(slug);
+  }
+
+  // ====== Multi-party media helpers ======
+  async function ensureLocalMedia(){
+    if (localStream) return localStream;
+    try{
+      localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+      upsertLocalTile();
+      return localStream;
+    }catch(e){
+      toast('Camera/mic blocked.');
+      return null;
+    }
+  }
+  function upsertLocalTile(){
+    const myId = peer?.id;
+    if (!myId || !localStream) return;
+    upsertTile(myId, `${nickname} (you)`, localStream, /*muted*/true);
+  }
+  function upsertRemoteTile(peerId, name, stream){
+    upsertTile(peerId, name, stream, /*muted*/false);
+  }
+  function upsertTile(peerId, name, stream, muted){
+    let tile = videoTiles.get(peerId)?.el;
+    if (!tile){
+      tile = document.createElement('div');
+      tile.className = 'videoTile';
+      tile.style.cssText = `
+        position:relative; border-radius:12px; overflow:hidden;
+        border:1px solid rgba(255,255,255,0.22); box-shadow:0 12px 28px rgba(0,0,0,0.25);
+        background:rgba(255,255,255,0.06);
+      `;
+      tile.innerHTML = `
+        <video playsinline autoplay ${muted ? 'muted' : ''} style="width:100%;height:100%;aspect-ratio:16/9;object-fit:cover;${muted?'transform:scaleX(-1);':''}"></video>
+        <div class="label" style="position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.55);color:#fff;padding:2px 8px;font-size:12px;border-radius:999px;"></div>
+      `;
+      videoGrid.appendChild(tile);
+      videoTiles.set(peerId, { el: tile, name });
+    }
+    const v = tile.querySelector('video');
+    if (v.srcObject !== stream) v.srcObject = stream;
+    tile.querySelector('.label').textContent = name || peerId;
+  }
+  function teardownPeerMedia(peerId){
+    const call = mediaCalls.get(peerId);
+    try { call?.close?.(); } catch {}
+    mediaCalls.delete(peerId);
+    const tile = videoTiles.get(peerId)?.el;
+    if (tile){ try { tile.remove(); } catch {} }
+    videoTiles.delete(peerId);
+  }
+  function stopAllMedia(){
+    for (const [,call] of mediaCalls){ try{ call.close(); }catch{} }
+    mediaCalls.clear();
+    for (const [,tile] of videoTiles){ try{ tile.el.remove(); }catch{} }
+    videoTiles.clear();
+    if (localStream){
+      for (const tr of localStream.getTracks()){ try{ tr.stop(); }catch{} }
+      localStream = null;
+    }
+  }
+  function nameForPeer(pid){
+    if (pid === peer?.id) return `${nickname} (you)`;
+    return peersMeta.get(pid)?.name || `Guest-${String(pid).slice(0,4)}`;
+  }
+
+  async function syncMediaWithRoster(){
+    if (loungeMode !== 'video') return;
+    if (!peer?.id) return;
+
+    const stream = await ensureLocalMedia();
+    if (!stream) return;
+
+    const myId = peer.id;
+    const targets = lastRoster
+      .filter(m => m.id && m.id !== myId)
+      .map(m => ({ id: m.id, name: m.name }));
+
+    // establish calls to peers with greater id to avoid duplicates
+    for (const t of targets){
+      if (mediaCalls.has(t.id)) continue;
+      if (myId < t.id){
+        try {
+          const call = peer.call(t.id, stream);
+          if (!call) continue;
+          mediaCalls.set(t.id, call);
+          call.on('stream', (remote) => upsertRemoteTile(t.id, nameForPeer(t.id), remote));
+          call.on('close',  () => teardownPeerMedia(t.id));
+          call.on('error',  () => teardownPeerMedia(t.id));
+        } catch {}
+      }
+    }
+
+    const present = new Set(targets.map(t => t.id).concat([myId]));
+    for (const pid of Array.from(videoTiles.keys())){
+      if (!present.has(pid)) teardownPeerMedia(pid);
+    }
+  }
+
+  function updateLoungeModeUI(){
+    if (!lgModeHeading || !videoGrid) return;
+    lgModeHeading.textContent = loungeMode === 'video' ? 'Video Chat' : 'Message Chat';
+    videoGrid.style.display = (loungeMode === 'video') ? 'grid' : 'none';
+    messagesEl.style.display = (loungeMode === 'video') ? 'none' : '';
+    composer.style.display   = (loungeMode === 'video') ? 'none' : 'flex';
   }
 
   // ====== Send message ======
@@ -863,6 +1069,7 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
         try { conn.close(); } catch{}
       }
       if(peer){ try{ peer.destroy(); }catch{} }
+      stopAllMedia(); // <-- also tear down video
     } finally {
       setConnected(false);
       showSetupUI();
@@ -877,6 +1084,8 @@ const makePeer = (id) => new Peer(id, PEER_OPTS);
   // ====== Startup ======
   ensureRowGaps();
   setActiveTab('browse');
+  ensureVideoUI();
+  updateLoungeModeUI();
 
   window.addEventListener('beforeunload', () => {
     try { gracefulLeave(); } catch {}
