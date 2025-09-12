@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // ---------- Persistent stores ----------
-const DATA_DIR  = path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUB_FILE  = path.join(DATA_DIR, 'lounges.json');          // public/listed directory (no messages)
 const PRIV_FILE = path.join(DATA_DIR, 'private_lounges.json');  // private lounges (salt+hash of key)
 
