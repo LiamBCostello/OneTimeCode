@@ -21,9 +21,8 @@
 
   const msgTemplate = $('#msgTemplate');
 
-  // Fast matching tunables
-  const CONNECT_TIMEOUT_MS = 160;
-  const BATCH_SIZE = 6;
+  // Matching tunables
+  const MATCH_POLL_MS = 1200;   // how often to poll /match when waiting
 
   // ---- Dynamically add switch bars (no HTML edits needed) ----
   let videoSwitchBar, requestTextBtn;
@@ -69,11 +68,12 @@
   let localStream = null;
   let remoteStream= null;
 
-  let isHost      = false;
-  let currentSlot = null;
   let cancelled   = false;
   let filter      = 'all';
-  let mode        = 'video'; // <-- default to video
+  let mode        = 'video'; // default to video
+
+  // Keep track of who we're connected to (PeerJS id)
+  let remotePeerId = null;
 
   // Consent-based switching
   let localSwitchRequest  = null;
@@ -88,15 +88,15 @@
   let autoRematching = false;
   let endingVideoDueToSwitch = false;
 
-  const SLOT_COUNT = 28;
-
+  // PeerJS options
   const PEER_OPTS_BASE = {
-    host: location.hostname,
+    host: location.hostname,              // For packaged apps, hard-set to your domain
     secure: location.protocol === 'https:',
     path: '/peerjs',
     debug: 1,
     config: {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      // TIP: add TURN here for mobile/cellular reliability
     }
   };
   const PEER_OPTS = location.port
@@ -182,18 +182,30 @@
     setTimeout(() => { autoRematching = false; }, 1000);
   }
 
-  // ---------- Slot logic (serverless matchmaking) ----------
-  function slotIdsForFilter(f){
-    const base = mode === 'video' ? 'onetime-talk-video' : 'onetime-talk-text';
-    const prefix = f === 'all' ? base : `${base}-${f}`;
-    return Array.from({length: SLOT_COUNT}, (_,i) => `${prefix}-${i}`);
+  // ---------- Small fetch helper ----------
+  async function apiPost(path, body){
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(body||{})
+    });
+    return res.json();
   }
-  function shuffle(arr){
-    for(let i=arr.length-1;i>0;i--){
-      const j = Math.floor(Math.random()*(i+1));
-      [arr[i],arr[j]] = [arr[j],arr[i]];
+
+  async function requestMatchLoop(){
+    // Poll /match until we get a partnerId
+    let partnerId = null;
+    while (!cancelled && !partnerId){
+      try{
+        const resp = await apiPost('/match', { mode, filter, peerId: peer?.id });
+        if (resp && resp.ok && resp.partnerId){
+          partnerId = resp.partnerId;
+          break;
+        }
+      }catch{}
+      await new Promise(r => setTimeout(r, MATCH_POLL_MS));
     }
-    return arr;
+    return partnerId;
   }
 
   function resetAll(){
@@ -204,9 +216,10 @@
       stopStreams();
     } finally {
       mediaCall = null;
-      conn = null; peer = null; isHost = false; currentSlot = null; cancelled = false;
+      conn = null; peer = null; cancelled = false;
       localSwitchRequest = null; remoteSwitchRequest = null;
       conversationStartMode = null; switchedFromTextToVideo = false;
+      remotePeerId = null;
       setConnected(false);
       messagesEl.innerHTML = '';
       setStatus('');
@@ -253,6 +266,7 @@
       if (!ok){ mode = 'text'; updateModeUI(); }
     }
 
+    // Create our PeerJS instance (random id)
     peer = makePeer(undefined);
     await new Promise(res => {
       let done = false;
@@ -261,6 +275,7 @@
     });
     if (cancelled) return;
 
+    // Ready to answer media calls when in Video mode
     peer.on('call', async (call) => {
       if (mode !== 'video') { try{ call.close(); }catch{}; return; }
       const stream = await ensureLocalMedia();
@@ -270,48 +285,70 @@
       wireMediaEvents(mediaCall);
     });
 
-    const order = shuffle(slotIdsForFilter(filter));
-    const preferHost = Math.random() < 0.5;
-
-    if (!preferHost){
-      for (let i = 0; i < order.length && !cancelled; i += BATCH_SIZE){
-        const batch = order.slice(i, i + BATCH_SIZE);
-        setStatus(`Scanning slots ${batch.map(s=>s.split('-').pop()).join(', ')}…`);
-        const result = await tryConnectBatch(batch, CONNECT_TIMEOUT_MS);
-        if (result === 'connected'){
-          setStatus('Matched!');
-          setConnected(true);
-          if (mode === 'video'){
-            const stream = await ensureLocalMedia();
-            if (stream && !mediaCall){
-              try { mediaCall = peer.call(currentSlot, stream); wireMediaEvents(mediaCall); } catch {}
-            }
-          }
-          return;
-        }
-      }
-    }
-
-    const hostSlot = order[0];
-    const ok = await tryBecomeHost(hostSlot);
-    if (!ok){
-      const result = await tryConnectBatch(order.slice(0, BATCH_SIZE), CONNECT_TIMEOUT_MS);
-      if (result === 'connected'){
-        setStatus('Matched!');
+    // Also accept incoming data connections (race with our dial)
+    peer.on('connection', (c) => {
+      if (conn && conn.open) { try { c.close(); } catch {} return; }
+      conn = c;
+      remotePeerId = c.peer || remotePeerId;
+      conn.on('open', () => {
         setConnected(true);
-        if (mode === 'video'){
-          const stream = await ensureLocalMedia();
-          if (stream && !mediaCall){
-            try { mediaCall = peer.call(currentSlot, stream); wireMediaEvents(mediaCall); } catch {}
-          }
-        }
-        return;
-      }
-      return startMatching();
+        setStatus('Matched!');
+        connectMode = mode;
+        try { conn.send(JSON.stringify({ type:'hello', mode: connectMode })); } catch {}
+      });
+      conn.on('data', onData);
+      conn.on('close', () => {
+        appendMessage({system:true, text:'Stranger disconnected.'});
+        setConnected(false);
+        clearVideoEls(); stopStreams();
+        localSwitchRequest = null; remoteSwitchRequest = null;
+        refreshConsentButtonLabels();
+        autoNextAfterDisconnect();
+      });
+      conn.on('error', () => {});
+    });
+
+    // Ask the server to match us
+    setStatus('Joining queue…');
+    const partnerId = await requestMatchLoop();
+    if (cancelled) return;
+    if (!partnerId){
+      appendMessage({system:true, text:'Could not find a partner right now.'});
+      return;
     }
 
-    setStatus('Waiting for a partner…');
-    appendMessage({system:true, text:'You are now connected when someone joins.'});
+    // We will be the dialing side (if the other side hasn't dialed already)
+    conversationStartMode = mode;
+    setStatus('Matched!');
+    setConnected(true);
+
+    try {
+      const c = peer.connect(partnerId, { reliable: true });
+      conn = c;
+      remotePeerId = partnerId;
+      c.on('open', () => {
+        connectMode = mode;
+        safeSend({ type:'hello', mode: connectMode });
+      });
+      c.on('data', onData);
+      c.on('close', () => {
+        appendMessage({system:true, text:'Stranger disconnected.'});
+        setConnected(false);
+        clearVideoEls(); stopStreams();
+        localSwitchRequest = null; remoteSwitchRequest = null;
+        refreshConsentButtonLabels();
+        autoNextAfterDisconnect();
+      });
+      c.on('error', () => {});
+    } catch {}
+
+    // Start video call if currently in video mode
+    if (mode === 'video'){
+      const stream = await ensureLocalMedia();
+      if (stream && !mediaCall && remotePeerId){
+        try { mediaCall = peer.call(remotePeerId, stream); wireMediaEvents(mediaCall); } catch {}
+      }
+    }
   }
 
   function wireMediaEvents(call){
@@ -336,153 +373,12 @@
     });
   }
 
-  function tryConnectBatch(slots, ms){
-    return new Promise(resolve => {
-      if (!peer || peer.destroyed || !slots.length) return resolve('failed');
-
-      let resolved = false;
-      const conns = [];
-      const done = (result) => {
-        if (resolved) return;
-        resolved = true;
-        for (const c of conns){ try { if (!c.open) c.close(); } catch {} }
-        resolve(result);
-      };
-
-      const timer = setTimeout(() => done('none'), ms);
-
-      for (const slotId of slots){
-        try {
-          const c = peer.connect(slotId, { reliable: true });
-          conns.push(c);
-
-          c.on('open', () => {
-            if (resolved) return;
-            clearTimeout(timer);
-            conn = c;
-            isHost = false;
-            currentSlot = slotId;
-
-            conversationStartMode = mode;
-
-            connectMode = mode;
-            safeSend({ type:'hello', mode: connectMode });
-
-            conn.on('data', onData);
-            conn.on('close', () => {
-              appendMessage({system:true, text:'Stranger disconnected.'});
-              setConnected(false);
-              clearVideoEls(); stopStreams();
-              localSwitchRequest = null; remoteSwitchRequest = null;
-              refreshConsentButtonLabels();
-              autoNextAfterDisconnect();
-            });
-            conn.on('error', () => {});
-            done('connected');
-          });
-
-          c.on('error', () => {});
-        } catch {}
-      }
-    });
-  }
-
-  function tryConnectToHost(slotId, ms) {
-    return new Promise(resolve => {
-      if (!peer || peer.destroyed) return resolve('failed');
-      let resolved = false;
-      const done = (result) => { if (resolved) return; resolved = true; resolve(result); };
-
-      const c = peer.connect(slotId, { reliable: true });
-      c.on('error', () => { done('error'); });
-      const timer = setTimeout(() => { try { c.close(); } catch {} done('timeout'); }, ms);
-
-      c.on('open', () => {
-        clearTimeout(timer);
-        conn = c;
-        isHost = false;
-        currentSlot = slotId;
-
-        conversationStartMode = mode;
-
-        connectMode = mode;
-        safeSend({ type:'hello', mode: connectMode });
-
-        conn.on('data', onData);
-        conn.on('close', () => {
-          appendMessage({system:true, text:'Stranger disconnected.'});
-          setConnected(false);
-          clearVideoEls(); stopStreams();
-          localSwitchRequest = null; remoteSwitchRequest = null;
-          refreshConsentButtonLabels();
-          autoNextAfterDisconnect();
-        });
-        conn.on('error', () => {});
-        done('connected');
-      });
-    });
-  }
-
-  function tryBecomeHost(slotId){
-    return new Promise(resolve => {
-      try { if (peer) peer.destroy(); } catch {}
-      isHost = true;
-      currentSlot = slotId;
-      peer = makePeer(slotId);
-
-      peer.on('call', async (call) => {
-        if (mode !== 'video') { try { call.close(); } catch {} return; }
-        const stream = await ensureLocalMedia();
-        if (!stream) { try { call.close(); } catch {} return; }
-        mediaCall = call;
-        try { mediaCall.answer(stream); } catch {}
-        wireMediaEvents(mediaCall);
-      });
-
-      let resolved = false;
-      const done = (ok) => { if (resolved) return; resolved = true; resolve(ok); };
-
-      peer.on('open', () => {
-        peer.on('connection', (c) => {
-          if (conn && conn.open) { try { c.close(); } catch {} return; }
-          conn = c;
-          conn.on('open', () => {
-            setConnected(true);
-            setStatus('Matched!');
-            appendMessage({ system:true, text:'Partner joined.' });
-
-            conversationStartMode = mode;
-
-            conn.on('data', onData);
-            conn.on('close', () => {
-              appendMessage({system:true, text:'Stranger disconnected.'});
-              setConnected(false);
-              clearVideoEls(); stopStreams();
-              localSwitchRequest = null; remoteSwitchRequest = null;
-              refreshConsentButtonLabels();
-              autoNextAfterDisconnect();
-            });
-            conn.on('error', () => {});
-          });
-        });
-
-        done(true);
-      });
-
-      peer.on('error', () => { done(false); });
-    });
-  }
-
   // ---------- Data handling ----------
   function onData(raw){
     let msg; try { msg = JSON.parse(String(raw)); } catch { return; }
 
     if (msg.type === 'hello'){
-      if (isHost && ((msg.mode === 'video' && mode !== 'video') || (msg.mode === 'text' && mode !== 'text'))){
-        try { conn?.send(JSON.stringify({ type:'mismatch', expect: mode })); } catch {}
-        try { conn?.close(); } catch {}
-        return;
-      }
+      // no mode enforcement needed; both sides can still switch via consent protocol
       return;
     }
 
@@ -502,6 +398,7 @@
       return;
     }
 
+    // Consent switching
     if (msg.type === 'switch-request'){
       const to = msg.to === 'video' ? 'video' : 'text';
       remoteSwitchRequest = to;
@@ -540,6 +437,7 @@
 
   async function onRequestVideo(){
     if (!conn || !conn.open) return;
+    // Preflight: get media to trigger permission now
     const stream = await ensureLocalMedia();
     if (!stream) {
       localSwitchRequest = null;
@@ -561,6 +459,7 @@
     performSwitch(to, /*fromRemote*/false);
   }
 
+  // Actually perform the mode switch
   async function performSwitch(to, fromRemote){
     localSwitchRequest  = null;
     remoteSwitchRequest = null;
@@ -577,6 +476,7 @@
       return;
     }
 
+    // to === 'video'
     const stream = await ensureLocalMedia();
     if (!stream){
       if (!fromRemote) {
@@ -587,13 +487,13 @@
 
     switchedFromTextToVideo = (conversationStartMode === 'text');
     mode = 'video';
-    updateModeUI();
+    updateModeUI();           // shows video + applies .sbs
     appendMessage({system:true, text:'Switched to Video Chat.'});
     setStatus('Chatting via video.');
 
-    if (!isHost && currentSlot && peer && !mediaCall){
+    if (peer && remotePeerId && !mediaCall){
       try {
-        mediaCall = peer.call(currentSlot, stream);
+        mediaCall = peer.call(remotePeerId, stream);
         wireMediaEvents(mediaCall);
       } catch {}
     }
@@ -610,6 +510,7 @@
     msgInput.value = '';
   });
 
+  // Next/Space rule: only force Message if this convo started as Message and later switched to Video
   function rematchRespectingStart(){
     const forceText = (mode === 'video' && switchedFromTextToVideo === true);
     rematch(forceText);
@@ -624,6 +525,8 @@
       switchedFromTextToVideo = false;
       updateModeUI();
     }
+    // best-effort tell server we're leaving the queue
+    try { apiPost('/leave', { mode, filter, peerId: peer?.id }).catch(()=>{}); } catch {}
     resetAll();
     startMatching();
   }
@@ -631,6 +534,7 @@
   nextBtn.addEventListener('click', rematchRespectingStart);
   leaveBtn.addEventListener('click', () => {
     cancelled = true;
+    try { apiPost('/leave', { mode, filter, peerId: peer?.id }).catch(()=>{}); } catch {}
     resetAll();
     setStatus('You left the chat.');
   });
@@ -646,17 +550,20 @@
     }
   });
 
+  // Location filter (optional)
   locFilter?.addEventListener('change', () => {
     filter = locFilter.value || 'all';
     rematch();
   });
 
+  // Top toggle (Message ↔ Video)
   modeSwitch.addEventListener('change', () => {
     mode = modeSwitch.checked ? 'video' : 'text';
     updateModeUI();
     rematch();
   });
 
+  // Clicking your own video toggles side-by-side ↔ PiP (CSS handles visuals)
   localVideo?.addEventListener('click', () => {
     if (mode !== 'video') return;
     setSBS(!videoArea.classList.contains('sbs'));
@@ -665,7 +572,7 @@
   // ---------- Startup ----------
   document.addEventListener('DOMContentLoaded', () => {
     ensureSwitchUI();
-    mode = 'video';            // <-- start in video
+    mode = 'video';            // start in video
     updateModeUI();
     setConnected(false);
     startMatching();
@@ -674,6 +581,7 @@
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
     try {
+      try { apiPost('/leave', { mode, filter, peerId: peer?.id }).catch(()=>{}); } catch {}
       if (mediaCall) { try{ mediaCall.close(); }catch{} }
       if (conn)      { try { conn.close(); }      catch{} }
       if (peer)      { try { peer.destroy(); }    catch{} }
