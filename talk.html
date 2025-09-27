@@ -7,9 +7,9 @@
   <link rel="stylesheet" href="style.css" />
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="alternate icon" href="/favicon.ico">
-<link rel="apple-touch-icon" sizes="180x180" href="/favicon-512.png">
-<meta name="theme-color" content="#0b0f24">
+  <link rel="alternate icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-512.png">
+  <meta name="theme-color" content="#0b0f24">
 </head>
 <body class="talk-page">
   <div class="bg"></div>
@@ -63,24 +63,24 @@
     <section id="talkPanel" class="panel talk-card">
       <!-- Mode bar -->
       <div class="modebar">
-        <h2 class="mode-heading"><span id="modeHeadingText">Message Chat</span></h2>
+        <h2 class="mode-heading"><span id="modeHeadingText">Video Chat</span></h2>
 
         <!-- Segmented switch -->
         <div class="segSwitch" role="tablist" aria-label="Chat mode">
-          <input type="radio" name="chatmode" id="modeMsg" checked aria-controls="messages" aria-selected="true" />
+          <input type="radio" name="chatmode" id="modeMsg" aria-controls="messages" aria-selected="false" />
           <label for="modeMsg">Message</label>
 
-          <input type="radio" name="chatmode" id="modeVid" aria-controls="videoArea" aria-selected="false" />
+          <input type="radio" name="chatmode" id="modeVid" checked aria-controls="videoArea" aria-selected="true" />
           <label for="modeVid">Video</label>
 
           <span class="knob" aria-hidden="true"></span>
         </div>
 
         <!-- Hidden legacy checkbox for existing JS -->
-        <input type="checkbox" id="modeSwitch" style="display:none" />
+        <input type="checkbox" id="modeSwitch" style="display:none" checked />
       </div>
 
-      <!-- Status only (location removed for MVP) -->
+      <!-- Status -->
       <div class="talk-toolbar">
         <div class="status-wrap">
           <span class="dot live off" id="connDot"></span>
@@ -90,16 +90,16 @@
       </div>
 
       <!-- Video area (shown in Video mode) -->
-      <div id="videoArea" class="videoArea hidden" aria-live="polite">
+      <div id="videoArea" class="videoArea" aria-live="polite">
         <video id="remoteVideo" class="remoteVideo" autoplay playsinline></video>
         <video id="localVideo" class="localVideo" autoplay muted playsinline title="Click your video to toggle side-by-side"></video>
       </div>
 
       <!-- Transcript/messages -->
-      <ul id="messages" class="messages transcript" role="log" aria-live="polite"></ul>
+      <ul id="messages" class="messages transcript" role="log" aria-live="polite" style="display:none"></ul>
 
       <!-- Input bar (hidden in Video mode) -->
-      <form id="composer" class="inputBar" autocomplete="off">
+      <form id="composer" class="inputBar" autocomplete="off" style="display:none">
         <input id="msgInput" class="input msgInput" placeholder="Type a message…" />
         <button class="btn primary sendBtn" id="sendBtn" type="submit">Send</button>
       </form>
@@ -142,7 +142,7 @@
       const heading    = document.getElementById('modeHeadingText');
 
       function sync(){
-        const video = modeVid.checked;
+        const video = modeVid && modeVid.checked;
         if (modeSwitch) {
           modeSwitch.checked = video;
           modeSwitch.dispatchEvent(new Event('change', { bubbles: true }));
