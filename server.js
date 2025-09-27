@@ -76,6 +76,7 @@ app.get('/health', (req, res) => res.json({ ok:true }));
 // ---------- Direct HTML routes ----------
 app.get('/lounge', (req, res) => res.sendFile(path.join(__dirname, 'lounge.html')));
 app.get('/talk',   (req, res) => res.sendFile(path.join(__dirname, 'talk.html')));
+app.get('/',   (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ---------- Ephemeral presence (listed rooms) ----------
 /** Map<slug, { slug, count, lastSeen }> */
